@@ -1,9 +1,10 @@
 import os
 import hashlib
 from pathlib import Path
-from hr_assistant.config import RESUMES_DIR
+from langchain_openai import OpenAIEmbeddings
+from hr_assistant.config import RESUMES_DIR, OPENAI_API_KEY
 from hr_assistant.database import Database
-from hr_assistant.semantic_chunking import SemanticChunkerProcessor
+from hr_assistant.semantic_chunking import SemanticChunker
 
 def calculate_file_hash(file_path: Path) -> str:
     """Calcola l'hash SHA-256 del contenuto del file per tracciarne le modifiche."""
@@ -16,6 +17,9 @@ def calculate_file_hash(file_path: Path) -> str:
 class DocumentProcessor:
     def __init__(self, db: Database):
         self.collection = db.get_collection()
+        # Qui passiamo l'oggetto embeddings come richiede la classe del professore
+        embeddings_instance = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
+        self.chunker = SemanticChunker(embeddings=embeddings_instance)
 
     @staticmethod
     def get_document_metadata(file_path: str, file_hash: str) -> dict:
@@ -27,11 +31,18 @@ class DocumentProcessor:
 
     def sync_documents(self):
         """Sincronizza la cartella resumes/ con ChromaDB (Added, Updated, Removed)."""
+        print(f"\n[DEBUG] Controllo cartella resumes in corso...")
+        print(f"[DEBUG] Percorso assoluto cercato: {RESUMES_DIR.resolve()}")
+        
         if not RESUMES_DIR.exists():
+            print(f"[DEBUG] La cartella non esiste. La creo adesso...")
             RESUMES_DIR.mkdir(parents=True, exist_ok=True)
+            print(f"[DEBUG] Cartella creata, ma è vuota.")
             return
         
         local_files = {f.name: f for f in RESUMES_DIR.iterdir() if f.is_file() and f.suffix.lower() == ".txt"}
+        print(f"[DEBUG] File .txt trovati nella cartella: {list(local_files.keys())}")
+        
         local_file_names = set(local_files.keys())
 
         existing_data = self.collection.get(include=["metadatas"])
@@ -49,9 +60,11 @@ class DocumentProcessor:
                 file_to_chunk_ids.setdefault(source, []).append(chunk_id)
 
         db_file_names = set(db_files_info.keys())
+        print(f"[DEBUG] File già presenti nel database: {list(db_file_names)}")
 
         added_files = local_file_names - db_file_names
         removed_files = db_file_names - local_file_names
+        print(f"[DEBUG] File nuovi da aggiungere: {list(added_files)}")
         
         common_files = local_file_names.intersection(db_file_names)
         updated_files = set()
@@ -61,7 +74,6 @@ class DocumentProcessor:
             if current_hash != db_files_info.get(filename):
                 updated_files.add(filename)
 
-        # Rimuove dal DB i file obsoleti o modificati
         files_to_remove = removed_files.union(updated_files)
         for filename in files_to_remove:
             ids_to_delete = file_to_chunk_ids.get(filename, [])
@@ -76,8 +88,9 @@ class DocumentProcessor:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            chunks = SemanticChunkerProcessor.chunk_it(content)
-            
+            chunks = self.chunker.chunk_it(content)
+            print(f"[DEBUG] File '{filename}' suddiviso in {len(chunks)} chunk semantici.")
+
             documents = []
             ids = []
             metadatas = []
@@ -95,3 +108,4 @@ class DocumentProcessor:
                     ids=ids,
                     metadatas=metadatas
                 )
+                print(f"[DEBUG] Salvati con successo {len(documents)} chunk per il file '{filename}'.\n")

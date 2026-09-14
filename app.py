@@ -18,7 +18,7 @@ async def main(message: cl.Message):
 
     results = collection.query(
         query_texts=[user_query],
-        n_results=3
+        n_results=10
     )
     
     retrieved_chunks = results.get("documents", [[]])[0]
