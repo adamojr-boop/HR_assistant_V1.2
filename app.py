@@ -49,4 +49,4 @@ Domanda: {user_query}
 
     await cl.Message(content=response.content).send()
     
- # ---> Avvia L'app in Chainlit con interfaccia web
+ #poetry run chainlit run app.py -w ---> Avvia L'app in Chainlit con interfaccia web
