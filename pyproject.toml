@@ -1,18 +1,20 @@
 [tool.poetry]
 name = "hr-assistant"
 version = "0.1.0"
-description = "Assistente HR basato su RAG e ChromaDB"
+description = "Assistente HR basato su RAG"
 authors = ["Il tuo Nome <tuo.email@email.com>"]
-readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.10"
-chainlit = "^1.0.0"
+python = "^3.13"
+chainlit = "^2.0.0"
 openai = "^1.0.0"
-chromadb = "^0.4.0"
-langchain = "^0.1.0"
-langchain-text-splitters = "^0.0.1"
+langchain = "^0.3.0"
+langchain-openai = "^0.2.0"
+langchain-text-splitters = "^0.3.0"
+langchain-experimental = "^0.3.0"
 python-dotenv = "^1.0.0"
+pydantic = "^2.10.0"
 
 [build-system]
 requires = ["poetry-core"]
