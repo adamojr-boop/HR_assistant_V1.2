@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "hr-assistant"
+version = "0.1.0"
+description = "Assistente HR basato su RAG e ChromaDB"
+authors = ["Il tuo Nome <tuo.email@email.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+chainlit = "^1.0.0"
+openai = "^1.0.0"
+chromadb = "^0.4.0"
+langchain = "^0.1.0"
+langchain-text-splitters = "^0.0.1"
+python-dotenv = "^1.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
