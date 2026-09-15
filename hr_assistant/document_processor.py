@@ -1,10 +1,9 @@
 import os
 import hashlib
 from pathlib import Path
-from langchain_openai import OpenAIEmbeddings
-from hr_assistant.config import RESUMES_DIR, OPENAI_API_KEY
+from hr_assistant.config import RESUMES_DIR
 from hr_assistant.database import Database
-from hr_assistant.semantic_chunking import SemanticChunker
+from hr_assistant.semantic_chunking import SemanticChunkerProcessor
 
 def calculate_file_hash(file_path: Path) -> str:
     """Calcola l'hash SHA-256 del contenuto del file per tracciarne le modifiche."""
@@ -17,9 +16,6 @@ def calculate_file_hash(file_path: Path) -> str:
 class DocumentProcessor:
     def __init__(self, db: Database):
         self.collection = db.get_collection()
-        # Qui passiamo l'oggetto embeddings come richiede la classe del professore
-        embeddings_instance = OpenAIEmbeddings(openai_api_key=OPENAI_API_KEY)
-        self.chunker = SemanticChunker(embeddings=embeddings_instance)
 
     @staticmethod
     def get_document_metadata(file_path: str, file_hash: str) -> dict:
@@ -88,7 +84,7 @@ class DocumentProcessor:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
-            chunks = self.chunker.chunk_it(content)
+            chunks = SemanticChunkerProcessor.chunk_it(content)
             print(f"[DEBUG] File '{filename}' suddiviso in {len(chunks)} chunk semantici.")
 
             documents = []
