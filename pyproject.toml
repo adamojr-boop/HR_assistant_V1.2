@@ -15,6 +15,7 @@ langchain-text-splitters = "^0.3.0"
 langchain-experimental = "^0.3.0"
 python-dotenv = "^1.0.0"
 pydantic = "^2.10.0"
+chromadb = "^1.5.9"
 
 [build-system]
 requires = ["poetry-core"]
