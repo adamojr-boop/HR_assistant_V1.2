@@ -1,52 +1,32 @@
 import chainlit as cl
-from langchain_openai import ChatOpenAI
-from hr_assistant.database import Database
-from hr_assistant.document_processor import DocumentProcessor
-from hr_assistant.config import OPENAI_API_KEY
+from hr_assistant import get_database_stats, reindex_database, ask_hr_assistant
 
-db = Database()
-processor = DocumentProcessor(db)
-processor.sync_documents()
+@cl.on_chat_start
+async def start():
+    # Mostra i pulsanti all'avvio (stile dashboard del professore)[cite: 1]
+    actions = [
+        cl.Action(name="db_stats", value="stats", label="📊 Statistiche Database", payload={}),
+        cl.Action(name="db_reindex", value="reindex", label="🔄 Reindex Database", payload={})
+    ]
+    
+    await cl.Message(
+        content="**Informazioni del sistema:**\nPuoi interrogare i CV qui sotto o usare i comandi rapidi:",
+        actions=actions
+    ).send()
 
-collection = db.get_collection()
+@cl.action_callback("db_stats")
+async def on_db_stats(action: cl.Action):
+    count = get_database_stats()
+    await cl.Message(content=f"📊 **Statistiche Database:**\n- Chunk totali: `{count}`").send()
+    await action.remove()
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, openai_api_key=OPENAI_API_KEY)
+@cl.action_callback("db_reindex")
+async def on_db_reindex(action: cl.Action):
+    count = reindex_database()
+    await cl.Message(content=f"🔄 **Database Reindicizzato!**\n- Chunk totali attuali: `{count}`").send()
+    await action.remove()
 
 @cl.on_message
 async def main(message: cl.Message):
-    user_query = message.content
-
-    results = collection.query(
-        query_texts=[user_query],
-        n_results=10
-    )
-    
-    retrieved_chunks = results.get("documents", [[]])[0]
-    context = "\n\n".join(retrieved_chunks) if retrieved_chunks else "Nessun documento trovato."
-
-    prompt = f"""
-Sei un assistente HR esperto, preciso e rigoroso. 
-Analizza il contesto dei curriculum forniti per rispondere alla domanda dell'utente.
-
-REGOLE FONDAMENTALI:
-1. Basati ESCLUSIVAMENTE sulle informazioni presenti nel contesto. Non inventare mai candidati, esperienze o competenze che non compaiono nei testi.
-2. Estrai sempre il nome e cognome reale del candidato leggendolo dal testo o dal nome del file di origine.
-3. Se la risposta non è presente nei documenti o il requisito non è soddisfatto, rispondi chiaramente che non ci sono candidati con quei requisiti nel database.
-4. Concentrati sull'accuratezza e sull'estrazione puntuale delle competenze del candidato o dei candidati pertinenti trovati nel contesto.
-
-Struttura la risposta in questo modo:
-- **Candidato/i Individuati:** (Nome e Cognome reali, oppure "Nessuno")
-- **Competenze Rilevanti / Analisi:** (Elenco puntato delle competenze estratte dai testi coerenti con la domanda)
-- **Motivazione:** (Spiegazione chiara del perché il profilo è idoneo o perché non sono presenti risposte)
-
-Contesto (Curriculum):
-{context}
-
-Domanda: {user_query}
-"""
-
-    response = llm.invoke(prompt)
-
-    await cl.Message(content=response.content).send()
-    
- #poetry run chainlit run app.py -w ---> Avvia L'app in Chainlit con interfaccia web
+    answer = ask_hr_assistant(message.content)
+    await cl.Message(content=answer).send()
