@@ -1,6 +1,7 @@
 import os
 import hashlib
 from pathlib import Path
+from markitdown import MarkItDown
 from hr_assistant.config import RESUMES_DIR
 from hr_assistant.database import Database
 from hr_assistant.semantic_chunking import SemanticChunkerProcessor
@@ -14,8 +15,12 @@ def calculate_file_hash(file_path: Path) -> str:
     return sha256_hash.hexdigest()
 
 class DocumentProcessor:
+    # Estensioni supportate grazie a MarkItDown
+    SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md"}
+
     def __init__(self, db: Database):
         self.collection = db.get_collection()
+        self.md_converter = MarkItDown()
 
     @staticmethod
     def get_document_metadata(file_path: str, file_hash: str) -> dict:
@@ -25,8 +30,17 @@ class DocumentProcessor:
             "file_hash": file_hash
         }
 
+    def _convert_to_markdown(self, file_path: Path) -> str:
+        """Converte qualsiasi file supportato in Markdown usando MarkItDown."""
+        try:
+            result = self.md_converter.convert(str(file_path))
+            return result.text_content if result else ""
+        except Exception as e:
+            print(f"[DEBUG] Errore MarkItDown sul file {file_path.name}: {e}")
+            return ""
+
     def sync_documents(self):
-        """Sincronizza la cartella resumes/ con ChromaDB (Added, Updated, Removed)."""
+        """Sincronizza la cartella resumes/ con ChromaDB usando MarkItDown e Semantic Chunking."""
         print(f"\n[DEBUG] Controllo cartella resumes in corso...")
         print(f"[DEBUG] Percorso assoluto cercato: {RESUMES_DIR.resolve()}")
         
@@ -36,8 +50,11 @@ class DocumentProcessor:
             print(f"[DEBUG] Cartella creata, ma è vuota.")
             return
         
-        local_files = {f.name: f for f in RESUMES_DIR.iterdir() if f.is_file() and f.suffix.lower() == ".txt"}
-        print(f"[DEBUG] File .txt trovati nella cartella: {list(local_files.keys())}")
+        local_files = {
+            f.name: f for f in RESUMES_DIR.iterdir() 
+            if f.is_file() and f.suffix.lower() in self.SUPPORTED_EXTENSIONS
+        }
+        print(f"[DEBUG] File supportati trovati nella cartella: {list(local_files.keys())}")
         
         local_file_names = set(local_files.keys())
 
@@ -60,7 +77,6 @@ class DocumentProcessor:
 
         added_files = local_file_names - db_file_names
         removed_files = db_file_names - local_file_names
-        print(f"[DEBUG] File nuovi da aggiungere: {list(added_files)}")
         
         common_files = local_file_names.intersection(db_file_names)
         updated_files = set()
@@ -81,9 +97,13 @@ class DocumentProcessor:
             file_path = local_files[filename]
             current_hash = calculate_file_hash(file_path)
             
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            # Conversione nativa tramite MarkItDown
+            content = self._convert_to_markdown(file_path)
+            if not content:
+                print(f"[DEBUG] Impossibile estrarre testo da '{filename}'.")
+                continue
 
+            # Applicazione del Semantic Chunking
             chunks = SemanticChunkerProcessor.chunk_it(content)
             print(f"[DEBUG] File '{filename}' suddiviso in {len(chunks)} chunk semantici.")
 
@@ -104,4 +124,4 @@ class DocumentProcessor:
                     ids=ids,
                     metadatas=metadatas
                 )
-                print(f"[DEBUG] Salvati con successo {len(documents)} chunk per il file '{filename}'.\n")
+                print(f"[DEBUG] Salvati con successo {len(documents)} chunk semantici per il file '{filename}'.\n")
